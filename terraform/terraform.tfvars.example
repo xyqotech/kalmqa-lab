@@ -1,0 +1,11 @@
+# Copie ce fichier vers terraform.tfvars (ignoré par Git) et renseigne le projet.
+
+# L'identifiant du projet Google Cloud dédié à KalmQA.
+project_id = "mon-projet-kalmqa"
+
+# Les autres réglages ont une valeur par défaut (voir variables.tf) :
+# region       = "europe-west1"
+# zone         = "europe-west1-b"
+# machine_type = "e2-small"
+# domain       = "ytosign.com"
+# name_prefix  = "kalmqa"

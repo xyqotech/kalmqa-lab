@@ -1,0 +1,19 @@
+# Le proxy : il termine le HTTPS et passe les requêtes à Ytosign.
+#
+# Avec un vrai nom de domaine dans SITE_ADDRESS, Caddy obtient et renouvelle seul
+# un certificat Let's Encrypt. Il faut pour cela que les ports 80 et 443 soient
+# ouverts et que le nom pointe vers ce serveur.
+# Avec « localhost », il fabrique un certificat local : de quoi répéter le
+# déploiement sur son poste, avec un avertissement du navigateur.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	reverse_proxy ytosign:3000
+}
+
+# L'ancienne adresse du site, s'il a changé de nom : elle redirige vers la nouvelle,
+# chemin compris, pour que les liens déjà envoyés par e-mail continuent de fonctionner.
+# Sans OLD_SITE_ADDRESS dans .env, compose fournit une adresse qui n'existe pas, en
+# HTTP seulement : Caddy ne demande alors aucun certificat et ce bloc ne sert à rien.
+{$OLD_SITE_ADDRESS} {
+	redir https://{$SITE_ADDRESS}{uri} permanent
+}

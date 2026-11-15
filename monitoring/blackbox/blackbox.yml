@@ -1,0 +1,9 @@
+# Sonde « boîte noire » : elle teste l'application de l'extérieur, sans rien savoir du code.
+
+modules:
+  # Réussite = la page répond en moins de 5 s avec un code 2xx.
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      preferred_ip_protocol: ip4

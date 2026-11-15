@@ -1,0 +1,159 @@
+# Pile de production KalmQA : Ytosign tel qu'il est publié, derrière un proxy HTTPS.
+#
+# Ce qui change par rapport à compose.local.yaml :
+#   - Ytosign n'est pas construit ici : on tire l'image publiée par sa CI ;
+#   - seul le proxy est exposé (ports 80 et 443). Grafana et Prometheus ne sont
+#     joignables que depuis le serveur lui-même, donc par un tunnel SSH ;
+#   - Grafana exige une connexion ; les e-mails partent par un vrai serveur SMTP ;
+#   - les journaux des conteneurs sont plafonnés, pour ne pas remplir le disque.
+#
+# Sur le serveur, depuis ce dossier (deploy/) :
+#   cp .env.prod.example .env      # puis renseigne chaque valeur
+#   docker compose -f compose.prod.yaml up -d
+# Le nom de la pile (préfixe des conteneurs et des volumes) vient de
+# COMPOSE_PROJECT_NAME, dans .env.
+#
+# Versions ÉPINGLÉES, jamais `latest` ni `main` : ce fichier dit exactement ce qui
+# tourne. Déployer une nouvelle version de Ytosign, c'est changer son étiquette
+# `sha-…` ici, dans un commit qu'on relit.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # La seule porte d'entrée. Caddy termine le HTTPS (certificat obtenu et renouvelé
+  # tout seul) et transmet à Ytosign l'adresse IP réelle du visiteur.
+  proxy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+      # Facultatif : une ancienne adresse du site, redirigée vers la nouvelle (voir le Caddyfile).
+      OLD_SITE_ADDRESS: ${OLD_SITE_ADDRESS:-http://ancienne-adresse.invalid}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Les certificats vivent ici : à conserver d'un redémarrage à l'autre.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - ytosign
+    logging: *logging
+
+  # L'application, dans l'image que sa CI a construite, démarrée puis publiée.
+  # Aucun port publié : on ne l'atteint que par le proxy.
+  ytosign:
+    # Publiée pour linux/amd64 et linux/arm64 : Docker prend celle de la machine.
+    image: ghcr.io/xyqotech/ytosign:sha-018be7f
+    restart: unless-stopped
+    environment:
+      APP_URL: https://${SITE_ADDRESS}
+      DATA_DIR: /data
+      DEFAULT_LOCALE: fr
+      # Entre guillemets : sans eux, YAML lirait « true » comme un booléen et compose le refuse.
+      ALLOW_SIGNUP: "${ALLOW_SIGNUP}"
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT}
+      MAIL_FROM: ${MAIL_FROM}
+      SMTP_URL: ${SMTP_URL}
+      # Le rôle et la base gardent le premier nom de l'application (« signsen »), comme les
+      # volumes plus bas : les renommer ferait démarrer la pile sur des données vides.
+      DATABASE_URL: postgres://signsen:${POSTGRES_PASSWORD}@db:5432/signsen
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - signsen-data:/data
+    logging: *logging
+
+  # La base de Ytosign. Changer de version majeure demande une sauvegarde et une
+  # restauration, jamais un simple changement d'étiquette.
+  db:
+    image: postgres:18.6-alpine3.24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: signsen
+      POSTGRES_DB: signsen
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MONITORING_PASSWORD: ${POSTGRES_MONITORING_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U signsen -d signsen"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - signsen-db:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    logging: *logging
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: db:5432/signsen?sslmode=disable
+      DATA_SOURCE_USER: monitoring
+      DATA_SOURCE_PASS: ${POSTGRES_MONITORING_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.29.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ../monitoring/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    logging: *logging
+
+  # Lié à 127.0.0.1 : pour le consulter, ouvre un tunnel SSH vers le serveur
+  # (ssh -L 9090:127.0.0.1:9090 …). Prometheus n'a pas d'authentification.
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - blackbox
+      - postgres-exporter
+    logging: *logging
+
+  # Lié à 127.0.0.1 lui aussi (ssh -L 3001:127.0.0.1:3001 …), et sans accès anonyme.
+  grafana:
+    image: grafana/grafana:13.3.1
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    logging: *logging
+
+volumes:
+  caddy-data:
+  caddy-config:
+  signsen-data:
+  signsen-db:
+  prometheus-data:
+  grafana-data:

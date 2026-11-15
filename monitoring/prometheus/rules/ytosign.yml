@@ -1,0 +1,24 @@
+# Règles d'alerte. Sans Alertmanager (lot ultérieur) elles ne notifient personne :
+# on les lit dans Prometheus, onglet « Alerts ».
+
+groups:
+  - name: ytosign
+    rules:
+      - alert: YtosignInjoignable
+        expr: probe_success{job="ytosign-http"} == 0
+        # « for » évite de crier pour un raté isolé : il faut 1 minute d'échecs.
+        for: 1m
+        labels:
+          severity: critique
+        annotations:
+          summary: "Ytosign ne répond plus"
+          description: "La sonde échoue sur {{ $labels.instance }} depuis plus d'une minute."
+
+      - alert: YtosignLent
+        expr: avg_over_time(probe_duration_seconds{job="ytosign-http"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: avertissement
+        annotations:
+          summary: "Ytosign répond lentement"
+          description: "Temps de réponse moyen au-dessus de 1 s sur 5 minutes ({{ $labels.instance }})."

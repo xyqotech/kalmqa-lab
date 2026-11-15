@@ -1,0 +1,13 @@
+# Les tableaux de bord vivent dans le dépôt (monitoring/grafana/dashboards) :
+# on les modifie par commit, pas en cliquant dans l'interface. Un fichier retiré
+# ou renommé dans le dépôt retire l'ancien tableau de bord de Grafana.
+apiVersion: 1
+
+providers:
+  - name: kalmqa
+    folder: KalmQA
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
