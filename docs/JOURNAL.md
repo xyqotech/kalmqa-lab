@@ -35,7 +35,7 @@ premier nom, volontairement : voir « Décisions prises ».
 | Déploiement automatique | **À faire** | — |
 | Tests sur Firefox et Safari | **À faire** | Ytosign |
 
-Versions en service : Ytosign `sha-018be7f` (branche `main`), Postgres 18.6, Caddy 2.11.9, Prometheus 3.16.0, Grafana 13.3.1.
+Versions en service : Ytosign `sha-da8252c` (branche `main`, déployée le 16 novembre 2026), Postgres 18.6, Caddy 2.11.9, Prometheus 3.16.0, Grafana 13.3.1.
 
 ## Ce qui tourne
 

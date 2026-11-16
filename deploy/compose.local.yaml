@@ -17,7 +17,7 @@ services:
   # publiée : la même qu'en production. Son code vit dans un dépôt à part.
   ytosign:
     # Publiée pour linux/amd64 et linux/arm64 : Docker prend celle de ta machine.
-    image: ghcr.io/xyqotech/ytosign:sha-018be7f
+    image: ghcr.io/xyqotech/ytosign:sha-da8252c
     restart: unless-stopped
     environment:
       APP_URL: http://localhost:3000

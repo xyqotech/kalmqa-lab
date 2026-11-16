@@ -49,7 +49,7 @@ services:
   # Aucun port publié : on ne l'atteint que par le proxy.
   ytosign:
     # Publiée pour linux/amd64 et linux/arm64 : Docker prend celle de la machine.
-    image: ghcr.io/xyqotech/ytosign:sha-018be7f
+    image: ghcr.io/xyqotech/ytosign:sha-da8252c
     restart: unless-stopped
     environment:
       APP_URL: https://${SITE_ADDRESS}
