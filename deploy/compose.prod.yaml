@@ -57,6 +57,8 @@ services:
       DEFAULT_LOCALE: fr
       # Entre guillemets : sans eux, YAML lirait « true » comme un booléen et compose le refuse.
       ALLOW_SIGNUP: "${ALLOW_SIGNUP}"
+      # L'API sous /api/v1 et les webhooks : fermés sans API_ENABLED=true dans .env.
+      API_ENABLED: "${API_ENABLED:-false}"
       MAIL_TRANSPORT: ${MAIL_TRANSPORT}
       MAIL_FROM: ${MAIL_FROM}
       SMTP_URL: ${SMTP_URL}
