@@ -83,11 +83,13 @@ resource "google_compute_address" "signsen" {
 
 # ─── Machine ──────────────────────────────────────────────────────────────────
 
-# L'identité de la machine. Elle n'a AUCUN rôle : si le serveur est compromis,
-# il ne peut rien faire dans le projet Google Cloud.
+# L'identité de la machine. Elle n'a qu'UN droit, donné dans sauvegardes.tf :
+# déposer un fichier dans le bucket des sauvegardes. Si le serveur est compromis,
+# il ne peut rien faire d'autre dans le projet Google Cloud, pas même relire ou
+# effacer ces sauvegardes.
 resource "google_service_account" "vm" {
   account_id   = "${var.name_prefix}-vm"
-  display_name = "Serveur SignSen (aucun droit)"
+  display_name = "Serveur SignSen (dépôt des sauvegardes seulement)"
 }
 
 resource "google_compute_instance" "signsen" {

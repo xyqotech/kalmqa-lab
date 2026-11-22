@@ -1,0 +1,19 @@
+#!/bin/bash
+# Installe la sauvegarde quotidienne : un service systemd et son minuteur.
+#
+#   sudo /opt/kalmqa/deploy/sauvegarde/installer
+#
+# Rejouable : relancer ce script met simplement les deux fichiers à jour.
+set -euo pipefail
+
+ici=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+
+for unite in kalmqa-sauvegarde.service kalmqa-sauvegarde.timer; do
+  # Le chemin du script dépend de l'endroit où la pile est déposée.
+  sed "s#@SAUVEGARDE@#$ici#g" "$ici/$unite" > "/etc/systemd/system/$unite"
+  chmod 644 "/etc/systemd/system/$unite"
+done
+
+systemctl daemon-reload
+systemctl enable --now kalmqa-sauvegarde.timer
+systemctl list-timers kalmqa-sauvegarde.timer --no-pager

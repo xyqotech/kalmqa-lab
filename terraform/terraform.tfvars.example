@@ -9,3 +9,10 @@ project_id = "mon-projet-kalmqa"
 # machine_type = "e2-small"
 # domain       = "ytosign.com"
 # name_prefix  = "kalmqa"
+
+# L'adresse prévenue par Google quand le site ne répond plus. Sans elle, aucune
+# vérification externe n'est créée.
+# alert_email = "toi@exemple.fr"
+
+# Durée de conservation des sauvegardes, en jours.
+# backup_retention_days = 30

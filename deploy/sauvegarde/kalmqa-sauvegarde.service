@@ -1,0 +1,12 @@
+# Lance une sauvegarde. Déclenché par kalmqa-sauvegarde.timer ; à la main :
+#   sudo systemctl start kalmqa-sauvegarde.service
+#   sudo journalctl -u kalmqa-sauvegarde.service -n 30
+[Unit]
+Description=Sauvegarde de Ytosign hors du serveur
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=@SAUVEGARDE@/sauvegarder

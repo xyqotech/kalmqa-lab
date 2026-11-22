@@ -5,6 +5,7 @@
 #   - seul le proxy est exposé (ports 80 et 443). Grafana et Prometheus ne sont
 #     joignables que depuis le serveur lui-même, donc par un tunnel SSH ;
 #   - Grafana exige une connexion ; les e-mails partent par un vrai serveur SMTP ;
+#   - les alertes sont envoyées par e-mail, et la machine est surveillée elle aussi ;
 #   - les journaux des conteneurs sont plafonnés, pour ne pas remplir le disque.
 #
 # Sur le serveur, depuis ce dossier (deploy/) :
@@ -127,10 +128,45 @@ services:
     volumes:
       - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ../monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - ../monitoring/prometheus/rules-production:/etc/prometheus/rules-production:ro
       - prometheus-data:/prometheus
     depends_on:
       - blackbox
       - postgres-exporter
+      - node-exporter
+      - alertmanager
+    logging: *logging
+
+  # Celui qui prévient. Prometheus lui remet les alertes ; il les regroupe et envoie
+  # un e-mail à ALERT_EMAIL_TO, par le même serveur SMTP que l'application.
+  # Lié à 127.0.0.1, comme Prometheus : à consulter par un tunnel SSH.
+  alertmanager:
+    image: prom/alertmanager:v0.35.0
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/alertmanager/demarrer.sh"]
+    environment:
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+      SMTP_URL: ${SMTP_URL}
+      MAIL_FROM: ${MAIL_FROM}
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ../monitoring/alertmanager/demarrer.sh:/etc/alertmanager/demarrer.sh:ro
+      - alertmanager-data:/alertmanager
+    logging: *logging
+
+  # La machine vue de l'intérieur : disque, mémoire. Il lit le disque du serveur en
+  # lecture seule, et le dossier où le script de sauvegarde note sa dernière réussite.
+  # Aucun port publié : seul Prometheus l'interroge.
+  node-exporter:
+    image: prom/node-exporter:v1.13.1
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/textfile
+    volumes:
+      - /:/host:ro
+      - ./sauvegarde/metriques:/textfile:ro
     logging: *logging
 
   # Lié à 127.0.0.1 lui aussi (ssh -L 3001:127.0.0.1:3001 …), et sans accès anonyme.
@@ -158,4 +194,5 @@ volumes:
   signsen-data:
   signsen-db:
   prometheus-data:
+  alertmanager-data:
   grafana-data:

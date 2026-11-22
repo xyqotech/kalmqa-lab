@@ -8,6 +8,7 @@
 #   Ytosign     http://localhost:3000
 #   Grafana     http://localhost:3001
 #   Prometheus  http://localhost:9090
+#   Alertmanager  http://localhost:9093
 #
 # Versions ÉPINGLÉES, jamais `latest` : une montée de version doit être un commit
 # qu'on relit, pas une surprise un matin.
@@ -101,6 +102,24 @@ services:
       - prometheus-data:/prometheus
     depends_on:
       - blackbox
+      - alertmanager
+
+  # Celui qui prévient. Prometheus lui remet les alertes qui se déclenchent. Ici,
+  # aucun e-mail ne part : on les lit dans son interface, http://localhost:9093.
+  alertmanager:
+    image: prom/alertmanager:v0.35.0
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/alertmanager/demarrer.sh"]
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ../monitoring/alertmanager/demarrer.sh:/etc/alertmanager/demarrer.sh:ro
+
+  # La machine vue de l'intérieur : disque, mémoire. Sur ton poste, c'est la petite
+  # machine virtuelle de Docker qu'il mesure.
+  node-exporter:
+    image: prom/node-exporter:v1.13.1
+    restart: unless-stopped
 
   # Les graphes. Source de données et tableau de bord sont chargés depuis le dépôt
   # (monitoring/grafana) : rien n'est cliqué à la main, tout est rejouable.

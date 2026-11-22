@@ -1,0 +1,27 @@
+# Alertes sur les sauvegardes. Ce dossier n'est monté qu'en production : la pile
+# locale ne fait pas de sauvegarde, ces règles y sonneraient en permanence.
+
+groups:
+  - name: sauvegarde
+    rules:
+      # La sauvegarde est quotidienne. Passé 26 heures, celle de la nuit a manqué
+      # ou échoué : le script n'écrit sa mesure qu'après un dépôt vérifié.
+      - alert: SauvegardeEnRetard
+        expr: time() - kalmqa_sauvegarde_derniere_reussite_timestamp_seconds > 26 * 3600
+        for: 10m
+        labels:
+          severity: critique
+        annotations:
+          summary: "La dernière sauvegarde réussie date de plus de 26 heures"
+          description: "Lire le journal : sudo journalctl -u kalmqa-sauvegarde.service -n 30"
+
+      # Aucune mesure du tout : la sauvegarde n'a jamais tourné, ou l'exportateur
+      # ne lit plus son fichier.
+      - alert: SauvegardeSansMesure
+        expr: absent(kalmqa_sauvegarde_derniere_reussite_timestamp_seconds)
+        for: 30m
+        labels:
+          severity: critique
+        annotations:
+          summary: "Aucune trace de sauvegarde dans la supervision"
+          description: "La mesure de la dernière sauvegarde manque depuis 30 minutes."

@@ -1,5 +1,6 @@
-# Règles d'alerte. Sans Alertmanager (lot ultérieur) elles ne notifient personne :
-# on les lit dans Prometheus, onglet « Alerts ».
+# Règles d'alerte. Prometheus les évalue et remet celles qui se déclenchent à
+# Alertmanager, qui prévient par e-mail quand un destinataire est réglé. On les lit
+# aussi dans Prometheus, onglet « Alerts ».
 
 groups:
   - name: ytosign

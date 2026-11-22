@@ -1,6 +1,7 @@
 # terraform/
 
-Le serveur KalmQA sur Google Cloud : une machine, son réseau, son pare-feu, son adresse.
+Le serveur KalmQA sur Google Cloud : une machine, son réseau, son pare-feu, son adresse, et ce
+qui veille sur elle (sauvegardes, visite extérieure).
 
 | Ressource | Rôle |
 |---|---|
@@ -8,8 +9,10 @@ Le serveur KalmQA sur Google Cloud : une machine, son réseau, son pare-feu, son
 | Pare-feu `kalmqa-web` | Ports 80 et 443, pour tout le monde |
 | Pare-feu `kalmqa-ssh-iap` | Port 22, uniquement depuis le tunnel IAP de Google |
 | Adresse `kalmqa-signsen` | Adresse fixe, sur laquelle pointe le DNS |
-| Compte de service `kalmqa-vm` | L'identité de la machine, sans aucun droit |
+| Compte de service `kalmqa-vm` | L'identité de la machine. Un seul droit : déposer dans le bucket des sauvegardes |
 | Machine `kalmqa-signsen` | `e2-small` (2 Go), Debian 12, Docker installé au démarrage |
+| Bucket `<projet>-sauvegardes` | Les sauvegardes, hors du serveur, supprimées après 30 jours. Jamais public |
+| Visite `/healthz` et son alerte | Google visite le site toutes les 5 minutes et écrit à `alert_email` si la visite échoue. Créées seulement si `alert_email` est renseigné |
 
 L'adresse et la machine portent le premier nom de l'application, « signsen » (aujourd'hui
 Ytosign). Ce nom ne se change pas : Terraform détruirait le serveur pour en créer un autre.
@@ -53,7 +56,8 @@ commandes de connexion.
 terraform destroy
 ```
 
-Tout ce que ce dossier a créé disparaît, et la facturation avec.
+Tout ce que ce dossier a créé disparaît, et la facturation avec. Exception voulue : le bucket
+refuse d'être détruit tant qu'il contient des sauvegardes. Les télécharger ou les supprimer d'abord.
 
 ## Ce qu'il faut savoir
 
@@ -65,6 +69,7 @@ Tout ce que ce dossier a créé disparaît, et la facturation avec.
 - **État Terraform** : il est gardé sur le poste (`terraform.tfstate`, ignoré par Git). Suffisant
   pour une personne seule ; en équipe, il irait dans un stockage partagé.
 - **Appliqué le 12/11/2026** : 9 ressources créées, serveur en marche, pile déployée dessus.
+  Complété le 22/11/2026 : bucket des sauvegardes, droit de dépôt, visite extérieure et son alerte.
 - **Si la seconde connexion échoue** (`gcloud auth application-default login`), Terraform accepte
   un jeton temporaire de la ligne de commande :
   `GOOGLE_OAUTH_ACCESS_TOKEN="$(gcloud auth print-access-token)" terraform plan`

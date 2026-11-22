@@ -1,5 +1,5 @@
-# Alertes sur la base de Ytosign. Comme pour ytosign.yml, sans Alertmanager elles
-# ne notifient personne : on les lit dans Prometheus, onglet « Alerts ».
+# Alertes sur la base de Ytosign. Comme celles de ytosign.yml, elles sont remises
+# à Alertmanager et se lisent dans Prometheus, onglet « Alerts ».
 
 groups:
   - name: postgres

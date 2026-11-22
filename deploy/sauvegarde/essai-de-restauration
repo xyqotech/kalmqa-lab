@@ -1,0 +1,82 @@
+#!/bin/bash
+# Essai de restauration : une sauvegarde qu'on n'a jamais restaurée n'en est pas une.
+#
+#   sudo /opt/kalmqa/deploy/sauvegarde/essai-de-restauration /chemin/ytosign-<date>.tar
+#
+# Restaure la base dans un Postgres JETABLE, sans réseau, supprimé à la fin. Ne
+# touche ni à la base en service ni aux documents. Affiche le nombre de lignes de
+# chaque table restaurée, et à côté celui de la base en service quand elle tourne
+# sur cette machine : les deux doivent se ressembler.
+set -euo pipefail
+umask 077
+
+archive=${1:?"Usage : essai-de-restauration /chemin/ytosign-<date>.tar"}
+ici=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+deploy=$(dirname "$ici")
+
+travail=$(mktemp -d /var/tmp/restauration.XXXXXX)
+jetable="essai-restauration-$$"
+trap 'docker rm -f "$jetable" >/dev/null 2>&1 || true; rm -rf "$travail"' EXIT
+
+echo "1/4 l'archive et ses empreintes"
+tar -C "$travail" -xf "$archive"
+( cd "$travail" && sha256sum -c EMPREINTES )
+
+echo "2/4 une base jetable"
+# Même version que la base en service. En mémoire seulement, et sans réseau.
+docker run -d --name "$jetable" --network none --tmpfs /var/lib/postgresql \
+  -e POSTGRES_USER=signsen -e POSTGRES_DB=signsen -e POSTGRES_PASSWORD=jetable \
+  postgres:18.6-alpine3.24 > /dev/null
+# L'image démarre d'abord un serveur provisoire, joignable seulement par son
+# fichier de connexion local. Par l'adresse 127.0.0.1, on n'atteint que le serveur définitif.
+for _ in $(seq 1 60); do
+  if docker exec "$jetable" psql -h 127.0.0.1 -U signsen -d signsen -Atc 'select 1' > /dev/null 2>&1; then
+    pret=oui
+    break
+  fi
+  sleep 1
+done
+if [ "${pret:-}" != oui ]; then
+  echo "La base jetable n'a pas démarré." >&2
+  exit 1
+fi
+
+echo "3/4 la restauration"
+# --no-owner --no-privileges : la base jetable n'a pas les comptes de la vraie
+# (supervision). Une vraie restauration les crée d'abord, puis restaure sans ces options.
+docker exec -i "$jetable" pg_restore -h 127.0.0.1 -U signsen -d signsen \
+  --no-owner --no-privileges --exit-on-error < "$travail/base.dump"
+
+compter() {
+  # $@ : la commande psql à utiliser. Écrit « table lignes », une table par ligne.
+  "$@" -Atc "select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by 1" < /dev/null \
+    | while read -r table; do
+        printf '%s %s\n' "$table" "$("$@" -Atc "select count(*) from public.\"$table\"" < /dev/null)"
+      done
+}
+compter docker exec "$jetable" psql -h 127.0.0.1 -U signsen -d signsen > "$travail/restauree"
+
+en_service=non
+if cd "$deploy" 2>/dev/null && docker compose -f compose.prod.yaml ps -q db 2>/dev/null | grep -q .; then
+  compter docker compose -f compose.prod.yaml exec -T db psql -U signsen -d signsen > "$travail/service"
+  en_service=oui
+fi
+
+echo "4/4 le résultat"
+if [ "$en_service" = oui ]; then
+  printf '%-28s %10s %12s\n' "table" "restaurée" "en service"
+  join -a 1 -e - -o 0,1.2,2.2 "$travail/restauree" "$travail/service" \
+    | while read -r table a b; do printf '%-28s %10s %12s\n' "$table" "$a" "$b"; done
+else
+  printf '%-28s %10s\n' "table" "restaurée"
+  while read -r table a; do printf '%-28s %10s\n' "$table" "$a"; done < "$travail/restauree"
+fi
+
+tables=$(wc -l < "$travail/restauree")
+lignes=$(awk '{ n += $2 } END { print n + 0 }' "$travail/restauree")
+fichiers=$(tar -tf "$travail/documents.tar" | grep -c -v '/$' || true)
+if [ "$tables" -eq 0 ]; then
+  echo "Aucune table restaurée." >&2
+  exit 1
+fi
+echo "Restauration réussie : $tables tables, $lignes lignes ; l'archive des documents se relit, $fichiers fichiers."

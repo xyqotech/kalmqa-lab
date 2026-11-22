@@ -6,6 +6,15 @@ global:
 
 rule_files:
   - /etc/prometheus/rules/*.yml
+  # Règles propres à un vrai serveur (les sauvegardes). Ce dossier n'est monté
+  # qu'en production ; absent, il est simplement ignoré.
+  - /etc/prometheus/rules-production/*.yml
+
+# À qui remettre les alertes : Alertmanager les regroupe et envoie les e-mails.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
 
 scrape_configs:
   # Prometheus se surveille lui-même.
@@ -17,6 +26,16 @@ scrape_configs:
   - job_name: blackbox
     static_configs:
       - targets: ["blackbox:9115"]
+
+  # Celui qui envoie les alertes est surveillé lui aussi.
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+  # La machine : disque, mémoire, et l'heure de la dernière sauvegarde.
+  - job_name: serveur
+    static_configs:
+      - targets: ["node-exporter:9100"]
 
   # La base vue de l'intérieur, par l'exportateur Postgres.
   - job_name: postgres

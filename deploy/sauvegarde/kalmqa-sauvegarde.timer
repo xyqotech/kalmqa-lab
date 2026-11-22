@@ -1,0 +1,12 @@
+# Une sauvegarde par nuit, vers 2 h 30 (heure universelle).
+[Unit]
+Description=Sauvegarde quotidienne de Ytosign
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+RandomizedDelaySec=15m
+# Si la machine était arrêtée à l'heure prévue, la sauvegarde part au démarrage.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

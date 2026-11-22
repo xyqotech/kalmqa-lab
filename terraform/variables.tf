@@ -37,3 +37,20 @@ variable "name_prefix" {
     error_message = "Le préfixe compte 3 à 21 caractères : minuscules, chiffres et tirets, en commençant par une lettre."
   }
 }
+
+variable "backup_retention_days" {
+  description = "Nombre de jours pendant lesquels une sauvegarde est gardée dans le bucket, avant d'être supprimée toute seule."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.backup_retention_days >= 7
+    error_message = "Garde au moins 7 jours de sauvegardes : une erreur ne se remarque pas toujours le lendemain."
+  }
+}
+
+variable "alert_email" {
+  description = "Adresse qui reçoit l'e-mail de Google quand le site ne répond plus. Vide : aucune vérification externe n'est créée. À renseigner dans terraform.tfvars, jamais ici."
+  type        = string
+  default     = ""
+}

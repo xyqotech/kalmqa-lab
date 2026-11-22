@@ -12,8 +12,8 @@ Où en est le projet et ce qui a été décidé : [docs/JOURNAL.md](docs/JOURNAL
 | Dossier | Rôle | État |
 |---|---|---|
 | `deploy/` | Fichiers compose : la pile locale, et la pile de production | Écrits et validés |
-| `monitoring/` | Configuration Prometheus, sonde, tableaux de bord Grafana, alertes | Écrit et validé |
-| `terraform/` | Le serveur cloud, son réseau, son pare-feu, son adresse | Appliqué : le serveur existe |
+| `monitoring/` | Configuration Prometheus, sonde, tableaux de bord Grafana, alertes et leur envoi | Écrit et validé |
+| `terraform/` | Le serveur cloud, son réseau, son pare-feu, son adresse, le bucket des sauvegardes, la visite extérieure | Appliqué : le serveur existe |
 | `.github/workflows/` | Plan Terraform et déploiement automatique | À venir |
 | `docs/` | Une fiche par épisode | Fiches 01 à 03 |
 
@@ -50,6 +50,7 @@ docker compose -f compose.local.yaml up -d
 | Ytosign | http://localhost:3000 |
 | Grafana (dossier KalmQA : « Ytosign — disponibilité » et « Ytosign — base de données ») | http://localhost:3001 |
 | Prometheus (cibles : Status → Targets ; alertes : Alerts) | http://localhost:9090 |
+| Alertmanager (les alertes déclenchées, telles qu'elles seraient envoyées) | http://localhost:9093 |
 
 Le compte `monitoring` est créé par `deploy/postgres/init/` au premier démarrage de la base.
 Sur une base déjà initialisée, lance le script une fois à la main :
@@ -153,8 +154,8 @@ sonde ~25 Mo, exportateur ~8 Mo. À garder en tête pour le choix de la VM cloud
   le serveur, les 16 événements du journal de preuves s'enchaînent sans rupture, et les
   adresses IP relevées sont celles des visiteurs, pas celles du proxy.
 
-**Pas validé** : la sauvegarde et la restauration, l'envoi des alertes, et un redémarrage du
-serveur.
+**Pas validé ce jour-là** : la sauvegarde et la restauration, l'envoi des alertes, et un
+redémarrage du serveur. Les trois l'ont été depuis : voir le journal.
 
 Piège rencontré : quand on change l'URL d'une cible, l'ancienne série reste visible cinq
 minutes dans Prometheus avec sa dernière valeur. Une alerte peut se déclencher sur ce fantôme.

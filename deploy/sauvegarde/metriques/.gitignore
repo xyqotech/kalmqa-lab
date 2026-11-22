@@ -1,0 +1,4 @@
+# Le dossier doit exister (l'exportateur du serveur le lit) ; son contenu est
+# écrit par le script de sauvegarde et ne se commite pas.
+*
+!.gitignore

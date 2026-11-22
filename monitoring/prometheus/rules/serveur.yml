@@ -1,0 +1,38 @@
+# Alertes sur la machine elle-même et sur la supervision.
+
+groups:
+  - name: serveur
+    rules:
+      # Un disque plein arrête tout : la base refuse d'écrire, les documents ne
+      # s'enregistrent plus. On prévient quand il reste de la marge pour agir.
+      - alert: DisquePresquePlein
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/", fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|overlay"} < 0.15
+        for: 10m
+        labels:
+          severity: critique
+        annotations:
+          summary: "Le disque du serveur est presque plein"
+          description: "Il reste moins de 15 % d'espace libre sur le disque depuis 10 minutes."
+
+      # Peu de mémoire disponible : le prochain pic fera tuer un conteneur.
+      - alert: MemoirePresquePleine
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels:
+          severity: avertissement
+        annotations:
+          summary: "Le serveur manque de mémoire"
+          description: "Moins de 10 % de la mémoire est disponible depuis 10 minutes."
+
+      # Une cible qui ne répond plus à Prometheus : on ne sait plus rien de ce
+      # qu'elle surveillait. (L'exportateur Postgres a sa propre alerte.)
+      - alert: MesuresInterrompues
+        expr: up{job!="postgres"} == 0
+        for: 5m
+        labels:
+          severity: avertissement
+        annotations:
+          summary: "Une partie de la supervision ne répond plus"
+          description: "Prometheus n'obtient plus de mesures de {{ $labels.job }} depuis 5 minutes."

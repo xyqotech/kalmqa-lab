@@ -1,0 +1,111 @@
+#!/bin/bash
+# Sauvegarde Ytosign hors du serveur : la base, puis les documents, dans le bucket.
+#
+# À lancer sur le serveur, en root (le minuteur systemd le fait chaque nuit) :
+#   sudo /opt/kalmqa/deploy/sauvegarde/sauvegarder
+#
+# Une sauvegarde est un seul fichier, ytosign-<date>.tar, qui contient :
+#   base.dump       la base, au format de pg_dump (-Fc), à restaurer avec pg_restore
+#   documents.tar   le volume de données : PDF, sceau du serveur, clé d'instance
+#   EMPREINTES      le SHA-256 des deux fichiers
+#
+# Trois contrôles avant de dire « réussi » :
+#   1. pg_restore sait relire le fichier de la base ;
+#   2. l'archive des documents se relit en entier ;
+#   3. Google confirme avoir reçu exactement les octets envoyés.
+# Le serveur a le droit de déposer dans le bucket, pas d'y relire : le contrôle 3
+# se fait donc sur la réponse du dépôt, qui donne l'empreinte de ce qui est arrivé.
+set -euo pipefail
+umask 077
+
+ici=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+deploy=$(dirname "$ici")
+cd "$deploy"
+
+bucket=$(grep -E '^BACKUP_BUCKET=' .env | tail -1 | cut -d= -f2- || true)
+if [ -z "$bucket" ]; then
+  echo "BACKUP_BUCKET n'est pas renseigné dans $deploy/.env" >&2
+  exit 1
+fi
+
+compose() { docker compose -f compose.prod.yaml "$@"; }
+
+horodatage=$(date -u +%Y%m%dT%H%M%SZ)
+nom="ytosign-$horodatage.tar"
+travail=$(mktemp -d /var/tmp/sauvegarde.XXXXXX)
+trap 'rm -rf "$travail"' EXIT
+
+# La base d'abord, les documents ensuite : un document n'est jamais supprimé, donc
+# tout ce que la base sauvegardée désigne se trouve dans l'archive faite après elle.
+echo "1/5 la base"
+compose exec -T db pg_dump -U signsen -d signsen -Fc < /dev/null > "$travail/base.dump"
+compose exec -T db pg_restore --list < "$travail/base.dump" > "$travail/sommaire"
+tables=$(grep -c ' TABLE DATA ' "$travail/sommaire" || true)
+if [ "$tables" -eq 0 ]; then
+  echo "La sauvegarde de la base ne contient aucune table." >&2
+  exit 1
+fi
+
+echo "2/5 les documents"
+conteneur=$(compose ps -q ytosign)
+volume=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$conteneur")
+if [ ! -d "$volume" ]; then
+  echo "Le volume des documents est introuvable." >&2
+  exit 1
+fi
+tar -C "$volume" -cf "$travail/documents.tar" .
+fichiers=$(tar -tf "$travail/documents.tar" | grep -c -v '/$' || true)
+
+echo "3/5 l'archive"
+(
+  cd "$travail"
+  sha256sum base.dump documents.tar > EMPREINTES
+  tar -cf "$nom" base.dump documents.tar EMPREINTES
+)
+taille=$(stat -c %s "$travail/$nom")
+md5_envoye=$(openssl md5 -binary "$travail/$nom" | base64)
+
+echo "4/5 le dépôt dans le bucket"
+# La machine demande à Google un jeton à durée courte, au nom de son compte de
+# service. Aucune clé n'est rangée sur le disque.
+jeton=$(curl -sf -H 'Metadata-Flavor: Google' \
+  'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token' \
+  | sed -E 's/.*"access_token" *: *"([^"]+)".*/\1/')
+# Le jeton passe par un fichier, pas par la ligne de commande, où il se lirait
+# dans la liste des processus.
+printf 'Authorization: Bearer %s\n' "$jeton" > "$travail/entete"
+# ifGenerationMatch=0 : le dépôt est refusé si un fichier de ce nom existe déjà.
+curl -sS --fail-with-body -X POST \
+  -H "@$travail/entete" -H 'Content-Type: application/x-tar' \
+  --data-binary "@$travail/$nom" \
+  "https://storage.googleapis.com/upload/storage/v1/b/$bucket/o?uploadType=media&name=$nom&ifGenerationMatch=0" \
+  > "$travail/reponse"
+md5_recu=$(sed -n -E 's/.*"md5Hash" *: *"([^"]+)".*/\1/p' "$travail/reponse" | head -1)
+if [ "$md5_recu" != "$md5_envoye" ]; then
+  echo "Le fichier reçu par Google n'a pas l'empreinte du fichier envoyé." >&2
+  exit 1
+fi
+
+# Pour l'essai de restauration : garder une copie sur place, à supprimer ensuite.
+if [ -n "${GARDER_DANS:-}" ]; then
+  cp "$travail/$nom" "$GARDER_DANS/"
+fi
+
+echo "5/5 la mesure pour la supervision"
+# L'exportateur du serveur lit ce fichier : Prometheus sait ainsi de quand date la
+# dernière sauvegarde réussie, et prévient si elle est trop ancienne.
+mesures="$ici/metriques"
+mkdir -p "$mesures"
+chmod 755 "$mesures"
+cat > "$mesures/sauvegarde.prom.tmp" <<MESURES
+# HELP kalmqa_sauvegarde_derniere_reussite_timestamp_seconds Heure de la dernière sauvegarde déposée et vérifiée.
+# TYPE kalmqa_sauvegarde_derniere_reussite_timestamp_seconds gauge
+kalmqa_sauvegarde_derniere_reussite_timestamp_seconds $(date +%s)
+# HELP kalmqa_sauvegarde_taille_octets Taille de la dernière sauvegarde.
+# TYPE kalmqa_sauvegarde_taille_octets gauge
+kalmqa_sauvegarde_taille_octets $taille
+MESURES
+chmod 644 "$mesures/sauvegarde.prom.tmp"
+mv "$mesures/sauvegarde.prom.tmp" "$mesures/sauvegarde.prom"
+
+echo "Sauvegarde réussie : $nom, $taille octets, $tables tables, $fichiers fichiers."
