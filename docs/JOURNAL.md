@@ -1,6 +1,6 @@
 # Journal de bord KalmQA
 
-> Dernière mise à jour : 22 novembre 2026.
+> Dernière mise à jour : 23 novembre 2026.
 > Ce journal dit où en est le projet, ce qui a été décidé et comment l'exploiter.
 > Il ne contient ni secret, ni adresse, ni identifiant de compte.
 
@@ -32,9 +32,10 @@ premier nom, volontairement : voir « Décisions prises ».
 | Renommage en Ytosign : application, dépôt, image | Fait, fusionné | Ytosign, commit `2ac5991` |
 | Renommage en Ytosign : ce dépôt | Fait, validé sur la pile locale | `deploy/`, `monitoring/` |
 | Renommage en Ytosign : DNS et déploiement | Fait le 15/11, vérifié | `https://ytosign.com` |
-| Sauvegarde quotidienne hors du serveur | Fait le 22/11, restauration essayée | `deploy/sauvegarde/`, `terraform/sauvegardes.tf` |
-| Envoi des alertes par e-mail | Fait le 22/11 ; chaîne validée en local, e-mail d'essai parti en production | `monitoring/alertmanager/`, `monitoring/prometheus/rules*/` |
+| Sauvegarde quotidienne hors du serveur | Fait le 22/11, restauration essayée ; première nuit automatique réussie le 23/11 | `deploy/sauvegarde/`, `terraform/sauvegardes.tf` |
+| Envoi des alertes par e-mail | Fait le 22/11 ; chaîne validée en local, e-mails d'essai reçus en production | `monitoring/alertmanager/`, `monitoring/prometheus/rules*/` |
 | Vérification du site depuis l'extérieur | Fait le 22/11, appliqué | `terraform/alertes.tf` |
+| Première application branchée sur l'API | Vérifié le 23/11 en production, parcours nominal : un document de 3 pages envoyé, signé par deux personnes et scellé ; 8 notifications envoyées, 8 acceptées au premier essai | — |
 | Déploiement automatique | **À faire** | — |
 | Tests sur Firefox et Safari | **À faire** | Ytosign |
 
